@@ -79,3 +79,48 @@ prediction <- data.frame(test$PassengerId, round(predicted))
 prediction <- rename(prediction, c(test.PassengerId="PassengerId", value="Survived"))
 write.table(prediction, file="prediction_R_logit_2.csv", sep=',', row.names=F, quote=F)
 ggplot(predicted, aes(x=value)) + geom_bar()
+
+
+
+lrfit3 <- glm(Survived ~ train.class + train.sex + Fare + SibSp + Parch + Age + train.sex * SibSp, family = binomial, data=train)
+summary(lrfit3)
+confint(lrfit3)
+anova(lrfit, lrfit2, test = "Chisq")
+anova(lrfit, lrfit3, test = "Chisq")
+lrfit4 <- glm(Survived ~ train.class + train.sex + Fare + SibSp + Parch + Age + train.sex * SibSp + train.class * Fare, family = binomial, data=train)
+anova(lrfit, lrfit4, test = "Chisq")
+
+with(lrfit3, null.deviance - deviance) #difference in deviance for the two models
+with(lrfit3, df.null - df.residual) #df for the difference between the two models
+with(lrfit3, pchisq(null.deviance-deviance, df.null-df.residual, lower.tail = FALSE)) #p-value
+
+coef(lrfit3)
+wald.test(b = coef(lrfit3), Sigma = vcov(lrfit3), Terms = 2) #class2
+wald.test(b = coef(lrfit3), Sigma = vcov(lrfit3), Terms = 3) #class3
+wald.test(b = coef(lrfit3), Sigma = vcov(lrfit3), Terms = 4) #sexmale
+wald.test(b = coef(lrfit3), Sigma = vcov(lrfit3), Terms = 5) #fare
+wald.test(b = coef(lrfit3), Sigma = vcov(lrfit3), Terms = 6) #sibsp
+wald.test(b = coef(lrfit3), Sigma = vcov(lrfit3), Terms = 7) #parch
+wald.test(b = coef(lrfit3), Sigma = vcov(lrfit3), Terms = 8) #age
+
+# Odds ratios
+exp(coef(lrfit3))
+
+ClassLog(lrfit3, train$Survived)
+
+newdata <- data.frame(test,train.sex=test.sex,train.class=test.class)
+predicted <- melt(predict(lrfit3, newdata, type = "response" ))
+
+prediction <- data.frame(test$PassengerId, round(predicted))
+prediction <- rename(prediction, c(test.PassengerId="PassengerId", value="Survived"))
+write.table(prediction, file="prediction_R_logit_3.csv", sep=',', row.names=F, quote=F)
+ggplot(predicted, aes(x=value)) + geom_bar()
+
+## With Caret
+
+library(caret)
+require('doMC')
+registerDoMC(cores = 2)
+model.rf <- train(Survived ~ ., data = train, method="rf")
+
+model.gbm <- train(Survived ~ ., data = train, method="gbm", verbose = FALSE)
