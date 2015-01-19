@@ -1,4 +1,12 @@
 # Load packages
+install.packages(c('psych',
+                   'car',
+                   'lsr',
+                   'ggplot2',
+                   'reshape',
+                   'aod',
+                   'QuantPsyc'))
+
 library(psych)
 library(car)
 library(lsr)
