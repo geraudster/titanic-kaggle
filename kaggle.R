@@ -16,7 +16,8 @@ library(aod)
 library(QuantPsyc)
 
 train <- read.table("train.csv", header=T, sep=",")
-train$Survived <- factor(train$Survived,levels=c(0,1), labels=c("Dead", "Survived"))
+train$Survived <- factor(train$Survived)
+train$SurvivedLabel <- factor(train$Survived,levels=c(0,1), labels=c("Dead", "Survived"))
 train$Pclass <- factor(train$Pclass)
 train.sex <- C(train$Sex, treatment)
 train.class <- C(train$Pclass)
@@ -126,9 +127,29 @@ ggplot(predicted, aes(x=value)) + geom_bar()
 
 ## With Caret
 
+install.packages(c('caret', 'randomForest', 'gbm', 'doMC', 'e1071'))
 library(caret)
 require('doMC')
 registerDoMC(cores = 2)
-model.rf <- train(Survived ~ ., data = train, method="rf")
+model.rf <- train(Survived ~ train.class + train.sex + Fare + SibSp + Parch + Age, data = train, method="rf")
 
-model.gbm <- train(Survived ~ ., data = train, method="gbm", verbose = FALSE)
+model.gbm <- train(Survived ~ train.class + train.sex + Fare + SibSp + Parch + Age, data = train, method="gbm", verbose = FALSE)
+
+model.rf.predict <- predict(model.rf, newdata = newdata)
+model.rf.predict.df <- data.frame(PassengerId = newdata$PassengerId, Survived = model.rf.predict)
+write.table(model.rf.predict.df, file="prediction_randomforest.csv", sep=',', row.names=F, quote=F)
+
+model.gbm.predict <- predict(model.gbm, newdata = newdata)
+model.gbm.predict.df <- data.frame(PassengerId = newdata$PassengerId, Survived = model.gbm.predict)
+write.table(model.gbm.predict.df, file="prediction_gbm.csv", sep=',', row.names=F, quote=F)
+
+model.rf.predict.train <- predict(model.rf, newdata = train)
+model.gbm.predict.train <- predict(model.gbm, newdata = train)
+
+modelsDf <- data.frame(model.rf.predict.train, model.gbm.predict.train, Survived = train$Survived)
+
+modelCombo <- train(Survived ~ ., data = modelsDf, method = 'rf')
+newdata <- data.frame(model.rf.predict.train = model.rf.predict, model.gbm.predict.train = model.gbm.predict)
+modelCombo.predict <- predict(modelCombo, newdata = newdata)
+modelCombo.predict.df <- data.frame(PassengerId = test$PassengerId, Survived = modelCombo.predict)
+write.table(modelCombo.predict.df, file="prediction_combo.csv", sep=',', row.names=F, quote=F)
