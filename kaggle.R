@@ -15,13 +15,32 @@ library(reshape)
 library(aod)
 library(QuantPsyc)
 
-train <- read.table("train.csv", header=T, sep=",")
-train$Survived <- factor(train$Survived)
-train$SurvivedLabel <- factor(train$Survived,levels=c(0,1), labels=c("Dead", "Survived"))
-train$Pclass <- factor(train$Pclass)
-train.sex <- C(train$Sex, treatment)
-train.class <- C(train$Pclass)
-train$Age[is.na(train$Age)] <- mean(train$Age, na.rm=T)
+prepareData <- function (file, hasLabel = TRUE, ageForNA, fareForNA) {
+  dataset <- read.table(file, header=T, sep=",", stringsAsFactors = FALSE)
+  
+  if(hasLabel) {
+    dataset$Survived <- factor(dataset$Survived)
+    dataset$SurvivedLabel <- factor(dataset$Survived,levels=c(0,1), labels=c("Dead", "Survived"))
+  }
+  dataset$Pclass <- factor(dataset$Pclass)
+  dataset$sex <- C(factor(dataset$Sex), treatment)
+  dataset$class <- C(dataset$Pclass)
+  
+  if(hasLabel) {
+    ageForNA <- mean(dataset$Age, na.rm=T)
+    fareForNA <- mean(dataset$Fare, na.rm=T)
+  }
+  ## impute missing age values
+  
+  dataset$Age[is.na(dataset$Age)] <- ageForNA
+  dataset$Fare[is.na(dataset$Fare)] <- fareForNA
+  
+  list(dataset, ageForNA, fareForNA)
+}
+
+trainList <- prepareData('train.csv')
+train <- trainList[[1]]
+
 
 describe(train)
 describeBy(train, train$Survived)
@@ -131,17 +150,24 @@ install.packages(c('caret', 'randomForest', 'gbm', 'doMC', 'e1071'))
 library(caret)
 require('doMC')
 registerDoMC(cores = 2)
-model.rf <- train(Survived ~ train.class + train.sex + Fare + SibSp + Parch + Age, data = train, method="rf")
 
-model.gbm <- train(Survived ~ train.class + train.sex + Fare + SibSp + Parch + Age, data = train, method="gbm", verbose = FALSE)
+testModel <- function(train, test, method) {
+  model <- list()
+  model$fit <- train(Survived ~ .,
+                     data = train[,-4],
+                     method=method)
+  model$predictions <- predict(model$fit, newdata = test[,-3])
+  model$predictionsdf <- data.frame(PassengerId = test$PassengerId, Survived = model$predictions)
+  model
+}
 
-model.rf.predict <- predict(model.rf, newdata = newdata)
-model.rf.predict.df <- data.frame(PassengerId = newdata$PassengerId, Survived = model.rf.predict)
-write.table(model.rf.predict.df, file="prediction_randomforest.csv", sep=',', row.names=F, quote=F)
+newdata <- prepareData('test.csv', hasLabel = FALSE, trainList[[2]], trainList[[3]])[[1]]
 
-model.gbm.predict <- predict(model.gbm, newdata = newdata)
-model.gbm.predict.df <- data.frame(PassengerId = newdata$PassengerId, Survived = model.gbm.predict)
-write.table(model.gbm.predict.df, file="prediction_gbm.csv", sep=',', row.names=F, quote=F)
+model.rf <- testModel(train, newdata, method="rf")
+model.gbm <- testModel(train, newdata, method="gbm")
+
+write.table(model.rf$predictionsdf, file="prediction_randomforest.csv", sep=',', row.names=F, quote=F)
+write.table(model.gbm$predictionsdf, file="prediction_gbm.csv", sep=',', row.names=F, quote=F)
 
 model.rf.predict.train <- predict(model.rf, newdata = train)
 model.gbm.predict.train <- predict(model.gbm, newdata = train)
@@ -153,3 +179,17 @@ newdata <- data.frame(model.rf.predict.train = model.rf.predict, model.gbm.predi
 modelCombo.predict <- predict(modelCombo, newdata = newdata)
 modelCombo.predict.df <- data.frame(PassengerId = test$PassengerId, Survived = modelCombo.predict)
 write.table(modelCombo.predict.df, file="prediction_combo.csv", sep=',', row.names=F, quote=F)
+
+## test with text mining
+install.packages('tm')
+library(tm)
+myCorpus <- Corpus(VectorSource(train$Name))
+dtm <- DocumentTermMatrix(myCorpus)
+train.merge <- cbind(train, inspect(dtm))
+
+testCorpus <- Corpus(VectorSource(newdata$Name))
+test.dtm <- DocumentTermMatrix(testCorpus, list(dictionary = colnames(dtm)))
+test.merge <- cbind(newdata, inspect(test.dtm))
+
+model.rf.tm <- testModel(train.merge, test.merge, method="rf")
+model.gbm.tm <- testModel(train.merge, test.merge, method="gbm")
