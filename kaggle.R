@@ -154,17 +154,21 @@ registerDoMC(cores = 2)
 testModel <- function(train, test, method) {
   model <- list()
   model$fit <- train(Survived ~ .,
-                     data = train[,-4],
+                     data = train[,-c(1,3:5,9,11,13)],
                      method=method)
-  model$predictions <- predict(model$fit, newdata = test[,-3])
+  model$predictions <- predict(model$fit, newdata = test[,-c(1,4,8,10)])
   model$predictionsdf <- data.frame(PassengerId = test$PassengerId, Survived = model$predictions)
   model
 }
 
 newdata <- prepareData('test.csv', hasLabel = FALSE, trainList[[2]], trainList[[3]])[[1]]
 
+# traintt <- dcast( train, PassengerId ~ Ticket, length)
+
 model.rf <- testModel(train, newdata, method="rf")
+# model.rf$predictions <- predict(model.rf$fit, newdata = newdata[,-c(1,4,8,10)])
 model.gbm <- testModel(train, newdata, method="gbm")
+# model.gbm$predictions <- predict(model.gbm$fit, newdata = newdata[,-c(1,4)], type = 'prob')
 
 write.table(model.rf$predictionsdf, file="prediction_randomforest.csv", sep=',', row.names=F, quote=F)
 write.table(model.gbm$predictionsdf, file="prediction_gbm.csv", sep=',', row.names=F, quote=F)
@@ -193,3 +197,5 @@ test.merge <- cbind(newdata, inspect(test.dtm))
 
 model.rf.tm <- testModel(train.merge, test.merge, method="rf")
 model.gbm.tm <- testModel(train.merge, test.merge, method="gbm")
+
+write.table(model.gbm.tm$predictionsdf, file="prediction_gbm_tm.csv", sep=',', row.names=F, quote=F)
