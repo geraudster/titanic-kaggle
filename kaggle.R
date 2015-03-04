@@ -199,3 +199,5 @@ model.rf.tm <- testModel(train.merge, test.merge, method="rf")
 model.gbm.tm <- testModel(train.merge, test.merge, method="gbm")
 
 write.table(model.gbm.tm$predictionsdf, file="prediction_gbm_tm.csv", sep=',', row.names=F, quote=F)
+
+model.evtree.tm <- testModel(train.merge, test.merge, method="evtree")
